@@ -23,28 +23,9 @@ config = Config(
     read_timeout=10
 )
 
+FFMPEG_PATH = '/usr/bin/ffmpeg'  # ffmpeg의 절대 경로 지정
 
-def get_s3_client():
-    try:
-        return boto3.client('s3',
-                            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-                            region_name=settings.AWS_S3_REGION_NAME,
-                            config=config
-                            )
-    except Exception as e:
-        logging.error(f"Failed to create S3 client: {str(e)}")
-        raise
-
-
-def clean_temp_files(file_paths):
-    for file_path in file_paths:
-        try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-        except Exception as e:
-            logging.error(f"Error cleaning up file {file_path}: {str(e)}")
-
+# 나머지 함수 정의 부분은 그대로 유지
 
 @shared_task
 def merge_videos_task(taker_id, exam_id):
@@ -88,18 +69,12 @@ def merge_videos_task(taker_id, exam_id):
                     gap_duration = start_time - previous_end_time
                     black_video_path = os.path.join(TEMP_DIR, f'black_{previous_end_time}_{start_time}.mp4')
 
-                    stream = ffmpeg.input('color=c=black:s=1280x720:d={}'.format(gap_duration),
-                                          f='lavfi')
-                    audio = ffmpeg.input('anullsrc=r=44100:cl=stereo:d={}'.format(gap_duration),
-                                         f='lavfi')
+                    stream = ffmpeg.input('color=c=black:s=1280x720:d={}'.format(gap_duration), f='lavfi')
+                    audio = ffmpeg.input('anullsrc=r=44100:cl=stereo:d={}'.format(gap_duration), f='lavfi')
 
-                    stream = ffmpeg.output(stream, audio,
-                                           black_video_path,
-                                           vcodec='libx264',
-                                           acodec='aac',
-                                           pix_fmt='yuv420p')
+                    stream = ffmpeg.output(stream, audio, black_video_path, vcodec='libx264', acodec='aac', pix_fmt='yuv420p')
 
-                    ffmpeg.run(stream, overwrite_output=True)
+                    ffmpeg.run(stream, cmd=FFMPEG_PATH, overwrite_output=True)  # 절대 경로 지정
 
                     processed_videos.append(black_video_path)
                     temp_files.append(black_video_path)
@@ -115,18 +90,9 @@ def merge_videos_task(taker_id, exam_id):
                 temp_files.append(local_video_path)
 
                 stream = ffmpeg.input(local_video_path)
-                stream = ffmpeg.output(stream,
-                                       output_resized_path,
-                                       vcodec='libx264',
-                                       acodec='aac',
-                                       preset='medium',
-                                       crf=23,
-                                       video_bitrate='2000k',
-                                       audio_bitrate='192k',
-                                       s='1280x720',
-                                       pix_fmt='yuv420p')
+                stream = ffmpeg.output(stream, output_resized_path, vcodec='libx264', acodec='aac', preset='medium', crf=23, video_bitrate='2000k', audio_bitrate='192k', s='1280x720', pix_fmt='yuv420p')
 
-                ffmpeg.run(stream, overwrite_output=True)
+                ffmpeg.run(stream, cmd=FFMPEG_PATH, overwrite_output=True)  # 절대 경로 지정
 
                 processed_videos.append(output_resized_path)
                 temp_files.append(output_resized_path)
@@ -150,15 +116,9 @@ def merge_videos_task(taker_id, exam_id):
 
         try:
             stream = ffmpeg.input(concat_file_path, format='concat', safe=0)
-            stream = ffmpeg.output(stream,
-                                   merged_output_path,
-                                   vcodec='libx264',
-                                   acodec='aac',
-                                   preset='medium',
-                                   crf=23,
-                                   pix_fmt='yuv420p')
+            stream = ffmpeg.output(stream, merged_output_path, vcodec='libx264', acodec='aac', preset='medium', crf=23, pix_fmt='yuv420p')
 
-            ffmpeg.run(stream, overwrite_output=True)
+            ffmpeg.run(stream, cmd=FFMPEG_PATH, overwrite_output=True)  # 절대 경로 지정
             temp_files.append(merged_output_path)
 
             s3_client.upload_file(
