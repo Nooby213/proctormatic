@@ -13,7 +13,7 @@ RUN python manage.py makemigrations
 RUN python manage.py migrate
 
 # 테스트 및 커버리지 리포트 생성
-RUN coverage run manage.py test --noinput --keepdb && coverage xml
-RUN cp coverage.xml /app/coverage.xml
+RUN coverage run manage.py test --noinput --keepdb
+RUN coverage xml
 
 CMD ["sh", "-c", "python3 manage.py migrate && (celery -A proctormatic worker -l debug -P eventlet -c 8 &) && python3 manage.py runserver 0.0.0.0:8000"]
