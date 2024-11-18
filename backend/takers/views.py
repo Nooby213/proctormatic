@@ -312,5 +312,4 @@ def subtract_duration_from_end_time(end_time, duration_seconds):
         # 다시 "HH:MM:SS" 형식으로 반환
         return new_time_obj.strftime("%H:%M:%S")
     except Exception as e:
-        print(f"Error: {e}")
         return None
