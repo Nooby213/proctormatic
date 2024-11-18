@@ -4,6 +4,7 @@
     "target": "es6",
     "module": "esnext",
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "types": ["@testing-library/jest-dom", "node", "jest"],
     "moduleResolution": "node",
     "resolveJsonModule": true,
