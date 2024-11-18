@@ -54,7 +54,7 @@ const useFaceMesh = (
 
     // FaceMesh 인스턴스를 생성할 때 로컬 파일을 사용하도록 설정
     const faceMesh = new FaceMesh({
-      locateFile: (file) => `${window.location.origin}/mediapipe/${file}`,
+      locateFile: (file) => `/mediapipe/${file}`,
     });
 
     faceMesh.setOptions({
