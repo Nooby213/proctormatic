@@ -1,5 +1,5 @@
 # 빌드 단계
-FROM node:16 AS build
+FROM node:18 AS build
 
 WORKDIR /app
 
