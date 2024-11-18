@@ -83,7 +83,6 @@ class AddWebCamTestCase(APITestCase):
         '''
         # Given
         data = {
-            'start_time': '12:00',
             'end_time': '13:00'
         }
 
@@ -93,47 +92,3 @@ class AddWebCamTestCase(APITestCase):
         # Then
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data['message'], '잘못된 요청입니다.')
-
-    @freeze_time("2024-11-14 12:50:00")
-    def test_add_web_cam_missing_start_time(self):
-        '''
-        시작 시간이 누락된 경우 - 400
-        '''
-        # Given
-        dummy_video = self.create_dummy_video()
-        data = {
-            'web_cam': dummy_video,
-            'end_time': '13:00'
-        }
-
-        # When
-        response = self.client.post(self.url, data, format='multipart', HTTP_AUTHORIZATION=f'Bearer {self.token}')
-
-        # Then
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['message'], '잘못된 요청입니다.')
-
-    @freeze_time("2024-11-14 12:50:00")
-    def test_add_web_cam_start_time_greater_than_end_time(self):
-        '''
-        start_time이 end_time보다 클 때 - 400
-        '''
-        # Given
-        dummy_video = self.create_dummy_video()
-        data = {
-            'web_cam': dummy_video,
-            'start_time': '14:30',
-            'end_time': '13:30'
-        }
-
-        # When
-        response = self.client.post(
-            self.url,
-            data,
-            format='multipart',
-            HTTP_AUTHORIZATION=f'Bearer {self.token}'
-        )
-
-        # Then
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.data['message'], '시작 시간이 종료 시간보다 클 수 없습니다.')

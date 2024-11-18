@@ -292,9 +292,6 @@ add_web_cam_schame = extend_schema_view(
                 'web_cam': {
                     'type': 'file'
                 },
-                'start_time': {
-                    'type': 'string',
-                },
                 'end_time': {
                     'type': 'string',
                 }
