@@ -1,5 +1,8 @@
 import re
 import os
+import io
+import ffmpeg
+import tempfile
 from accounts.utils import generate_verification_code, send_verification_email, save_verification_code_to_redis
 from exams.models import Exam
 from rest_framework.decorators import api_view, permission_classes, parser_classes, authentication_classes
@@ -19,7 +22,7 @@ from django.utils import timezone
 from datetime import datetime
 from django.conf import settings
 import boto3
-from takers.tasks import merge_videos_task
+from takers.celery.tasks import merge_videos_task
 
 @add_taker_schema
 @api_view(['POST', 'PATCH'])
@@ -214,30 +217,38 @@ def add_web_cam(request):
         return bad_request_invalid_data_response()
 
     web_cam_file = request.FILES['web_cam']
-    start_time = request.data.get('start_time')
     end_time = request.data.get('end_time')
 
-    if not start_time or not end_time:
+    if not end_time:
         return bad_request_invalid_data_response()
+    duration_seconds = get_video_duration_in_seconds(web_cam_file)
+    if duration_seconds is None:
+        return bad_request_response('영상 길이를 계산할 수 없습니다.')
 
+    start_time = subtract_duration_from_end_time(end_time, duration_seconds)
+    if start_time is None:
+        return bad_request_response('시작 시간을 계산할 수 없습니다.')
     start_time = start_time.replace(":", "")
     end_time = end_time.replace(":", "")
-
-    if start_time > end_time:
-        return bad_request_response('시작 시간이 종료 시간보다 클 수 없습니다.')
 
     s3_client = boto3.client('s3')
     _, file_extension = os.path.splitext(web_cam_file.name)
     file_name = f'webcam_{start_time}_{end_time}{file_extension}'
     s3_path = f"{exam_id}/{taker_id}/{file_name}"
-
     try:
-        s3_client.upload_fileobj(
-            web_cam_file,
-            settings.AWS_STORAGE_BUCKET_NAME,
-            s3_path,
-            ExtraArgs={'ContentType': web_cam_file.content_type}
-        )
+        with io.BytesIO() as byte_io:
+            for chunk in web_cam_file.chunks():
+                byte_io.write(chunk)
+
+            byte_io.seek(0)  # 파일 포인터를 처음으로 이동
+
+            # 파일 업로드
+            s3_client.upload_fileobj(
+                byte_io,
+                settings.AWS_STORAGE_BUCKET_NAME,
+                s3_path,
+                ExtraArgs={'ContentType': web_cam_file.content_type}
+            )
 
     except Exception as e:
         return internal_server_error(f'S3 업로드 실패: {str(e)}')
@@ -269,3 +280,36 @@ def is_valid_email(email):
     if re.match(email_regex, email):
         return True
     return False
+
+def get_video_duration_in_seconds(web_cam_file):
+    try:
+        # 웹캠 파일을 임시 파일로 저장
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".webm") as temp_file:
+            for chunk in web_cam_file.chunks():
+                temp_file.write(chunk)
+            temp_file.flush()
+            temp_file.close()  # 파일을 명시적으로 닫아서 FFmpeg가 읽을 수 있게 함
+
+            # FFmpeg를 사용하여 동영상 길이 추출
+            probe = ffmpeg.probe(temp_file.name)
+            duration = float(probe['format']['duration'])  # 초 단위로 동영상 길이 추출
+            os.remove(temp_file.name)  # 임시 파일 삭제
+            return duration
+    except Exception as e:
+        return None
+
+from datetime import datetime, timedelta
+
+
+def subtract_duration_from_end_time(end_time, duration_seconds):
+    try:
+        # end_time을 datetime 객체로 변환 (형식을 "%H:%M:%S"로 수정)
+        end_time_obj = datetime.strptime(end_time, "%H:%M:%S")
+
+        # duration_seconds 만큼 빼기
+        new_time_obj = end_time_obj - timedelta(seconds=duration_seconds)
+
+        # 다시 "HH:MM:SS" 형식으로 반환
+        return new_time_obj.strftime("%H:%M:%S")
+    except Exception as e:
+        return None
